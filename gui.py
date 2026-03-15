@@ -23,45 +23,12 @@ GREEN       = "#a6e3a1"
 RED         = "#f38ba8"
 YELLOW      = "#f9e2af"
 
-CATEGORY_COLORS = {
-    "Groceries":      "#2d6a4f",
-    "Gas":            "#6b2737",
-    "Restaurants":    "#7c4f1e",
-    "Shopping":       "#1a4a6b",
-    "Subscriptions":  "#4a2d6b",
-    "Activities":     "#1a5f5f",
-    "Gym":            "#5c4200",
-    "Car Repairs":    "#3d3d3d",
-    "Miscellaneous":  "#2e2e2e",
-    "Phone":          "#1a4a4a",
-    "Insurance":      "#1e3a5f",
-    "Rent":           "#4a1a5f",
-    "Internet Stuff": "#1a3a3a",
-    "Payment":        "#1a4d2e",
-    "Uncategorized":  "#5c1a1a",
-}
-
 NAV_ITEMS = [
     ("📥", "Import",       "import"),
     ("📋", "Transactions", "transactions"),
     ("📈", "Charts",       "charts"),
     ("🏷️",  "Rules",        "rules"),
 ]
-
-
-def _configure_tree_tags(tree):
-    """Register row tags (no row-level colors — canvas overlay handles Category cell coloring)."""
-    for cat in CATEGORY_COLORS:
-        tree.tag_configure(f"cat_{cat}")
-    tree.tag_configure("uncategorized")
-
-
-def _category_tag(cat):
-    """Return the Treeview row tag for a given category string."""
-    cat = str(cat)
-    if cat == "Uncategorized":
-        return "uncategorized"
-    return f"cat_{cat}" if cat in CATEGORY_COLORS else ""
 
 
 class ExpenseApp(ttk.Window):
@@ -103,77 +70,6 @@ class ExpenseApp(ttk.Window):
             background=[("selected", ACCENT)],
             foreground=[("selected", BG_BASE)],
         )
-
-    # ── Per-cell category canvas ───────────────────────────────────────────────
-    def _attach_category_canvas(self, tree, on_double_click=None):
-        """Overlay a Canvas on the Category column so only that cell gets a background color."""
-        canvas = tk.Canvas(tree, bg=BG_SURFACE, highlightthickness=0, bd=0)
-        _pos = {"col_x": 0, "first_y": 0}
-
-        def repaint(*_):
-            canvas.delete("all")
-            items = tree.get_children()
-            if not items:
-                canvas.place_forget()
-                return
-            for iid in items:
-                b = tree.bbox(iid, "Category")
-                if b:
-                    col_x, first_y, col_w, _ = b
-                    break
-            else:
-                return  # tree rendered but nothing visible (all scrolled away)
-            _pos["col_x"] = col_x
-            _pos["first_y"] = first_y
-            canvas.place(x=col_x, y=first_y, width=col_w,
-                         height=max(1, tree.winfo_height() - first_y))
-            for iid in items:
-                b = tree.bbox(iid, "Category")
-                if not b:
-                    continue
-                _, y, _, h = b
-                cy = y - first_y
-                cat = tree.set(iid, "Category")
-                color = CATEGORY_COLORS.get(cat, BG_SURFACE)
-                canvas.create_rectangle(0, cy, col_w, cy + h, fill=color, outline="")
-                fg = RED if cat == "Uncategorized" else FG_TEXT
-                canvas.create_text(6, cy + h // 2, text=cat, fill=fg,
-                                   font=("Segoe UI", 10), anchor="w")
-
-        class _Ev:
-            __slots__ = ("x", "y")
-            def __init__(self, x, y):
-                self.x = x
-                self.y = y
-
-        def _select_row(e):
-            """Select the row under the cursor without generating a synthetic event."""
-            iid = tree.identify_row(_pos["first_y"] + e.y)
-            if iid:
-                tree.selection_set(iid)
-                tree.focus(iid)
-
-        def _scroll(e):
-            tree.yview_scroll(int(-1 * (e.delta / 120)), "units")
-            tree.after_idle(repaint)
-
-        canvas.bind("<Button-1>",   _select_row)
-        canvas.bind("<MouseWheel>", _scroll)
-        tree.bind("<Configure>",    lambda _: tree.after_idle(repaint), add="+")
-        tree.bind("<MouseWheel>",   lambda _: tree.after_idle(repaint), add="+")
-
-        if on_double_click:
-            canvas.bind("<Double-1>",
-                        lambda e: on_double_click(
-                            _Ev(_pos["col_x"] + e.x, _pos["first_y"] + e.y)))
-        else:
-            canvas.bind("<Double-1>",
-                        lambda e: tree.event_generate(
-                            "<Double-1>",
-                            x=_pos["col_x"] + e.x,
-                            y=_pos["first_y"] + e.y))
-
-        return repaint
 
     # ── Top-level layout ───────────────────────────────────────────────────────
     def _build_layout(self):
@@ -317,13 +213,7 @@ class ExpenseApp(ttk.Window):
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
 
-        _configure_tree_tags(self._preview_tree)
-        self._preview_canvas_repaint = self._attach_category_canvas(self._preview_tree)
-
-        def _preview_yview(*a):
-            self._preview_tree.yview(*a)
-            self._preview_tree.after_idle(self._preview_canvas_repaint)
-        vsb.config(command=_preview_yview)
+        vsb.config(command=self._preview_tree.yview)
 
     def _load_csv(self):
         path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
@@ -359,8 +249,7 @@ class ExpenseApp(ttk.Window):
             cat = str(r.get("Category", ""))
             vals = (r.get("Date", ""), r.get("Description", ""),
                     r.get("Debit", ""), r.get("Credit", ""), cat)
-            self._preview_tree.insert("", "end", values=vals, tags=(_category_tag(cat),))
-        self._preview_tree.after_idle(self._preview_canvas_repaint)
+            self._preview_tree.insert("", "end", values=vals)
 
     def _import_data(self):
         if self._preview_df is None:
@@ -422,14 +311,7 @@ class ExpenseApp(ttk.Window):
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
 
-        _configure_tree_tags(self._tx_tree)
-        self._tx_canvas_repaint = self._attach_category_canvas(
-            self._tx_tree, on_double_click=self._on_tx_double_click)
-
-        def _tx_yview(*a):
-            self._tx_tree.yview(*a)
-            self._tx_tree.after_idle(self._tx_canvas_repaint)
-        vsb.config(command=_tx_yview)
+        vsb.config(command=self._tx_tree.yview)
 
         self._tx_tree.bind("<Double-1>", self._on_tx_double_click)
 
@@ -512,8 +394,7 @@ class ExpenseApp(ttk.Window):
             cat = str(r.get("Category", ""))
             vals = (r.get("Date", ""), r.get("Description", ""),
                     r.get("Debit", ""), r.get("Credit", ""), cat)
-            self._tx_tree.insert("", "end", values=vals, tags=(_category_tag(cat),))
-        self._tx_tree.after_idle(self._tx_canvas_repaint)
+            self._tx_tree.insert("", "end", values=vals)
 
     def _on_tx_double_click(self, event):
         """Open an inline editor for the Category cell."""
@@ -546,9 +427,8 @@ class ExpenseApp(ttk.Window):
             new_val = var.get()
             vals = list(self._tx_tree.item(item, "values"))
             vals[col_num] = new_val
-            self._tx_tree.item(item, values=vals, tags=(_category_tag(new_val),))
+            self._tx_tree.item(item, values=vals)
             combo.destroy()
-            self._tx_tree.after_idle(self._tx_canvas_repaint)
 
         combo.bind("<<ComboboxSelected>>", apply)
         combo.bind("<FocusOut>", lambda _e: combo.destroy())
