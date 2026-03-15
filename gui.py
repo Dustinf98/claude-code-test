@@ -105,9 +105,10 @@ class ExpenseApp(ttk.Window):
         )
 
     # ── Per-cell category canvas ───────────────────────────────────────────────
-    def _attach_category_canvas(self, tree):
+    def _attach_category_canvas(self, tree, on_double_click=None):
         """Overlay a Canvas on the Category column so only that cell gets a background color."""
         canvas = tk.Canvas(tree, bg=BG_SURFACE, highlightthickness=0, bd=0)
+        _pos = {"col_x": 0, "first_y": 0}
 
         def repaint(*_):
             canvas.delete("all")
@@ -122,6 +123,8 @@ class ExpenseApp(ttk.Window):
                     break
             else:
                 return  # tree rendered but nothing visible (all scrolled away)
+            _pos["col_x"] = col_x
+            _pos["first_y"] = first_y
             canvas.place(x=col_x, y=first_y, width=col_w,
                          height=max(1, tree.winfo_height() - first_y))
             for iid in items:
@@ -138,14 +141,28 @@ class ExpenseApp(ttk.Window):
                                    font=("Segoe UI", 10), anchor="w")
 
         def _fwd(e, etype):
-            tree.event_generate(etype, x=canvas.winfo_x() + e.x, y=canvas.winfo_y() + e.y)
+            tree.event_generate(etype,
+                                x=_pos["col_x"] + e.x,
+                                y=_pos["first_y"] + e.y)
 
         canvas.bind("<Button-1>",   lambda e: _fwd(e, "<Button-1>"))
-        canvas.bind("<Double-1>",   lambda e: _fwd(e, "<Double-1>"))
         canvas.bind("<Motion>",     lambda e: _fwd(e, "<Motion>"))
         canvas.bind("<MouseWheel>", lambda e: _fwd(e, "<MouseWheel>"))
         tree.bind("<Configure>",    lambda _: tree.after_idle(repaint), add="+")
         tree.bind("<MouseWheel>",   lambda _: tree.after_idle(repaint), add="+")
+
+        if on_double_click:
+            class _Ev:
+                __slots__ = ("x", "y")
+                def __init__(self, x, y):
+                    self.x = x
+                    self.y = y
+            canvas.bind("<Double-1>",
+                        lambda e: on_double_click(
+                            _Ev(_pos["col_x"] + e.x, _pos["first_y"] + e.y)))
+        else:
+            canvas.bind("<Double-1>", lambda e: _fwd(e, "<Double-1>"))
+
         return repaint
 
     # ── Top-level layout ───────────────────────────────────────────────────────
@@ -396,7 +413,8 @@ class ExpenseApp(ttk.Window):
         frame.columnconfigure(0, weight=1)
 
         _configure_tree_tags(self._tx_tree)
-        self._tx_canvas_repaint = self._attach_category_canvas(self._tx_tree)
+        self._tx_canvas_repaint = self._attach_category_canvas(
+            self._tx_tree, on_double_click=self._on_tx_double_click)
 
         def _tx_yview(*a):
             self._tx_tree.yview(*a)
