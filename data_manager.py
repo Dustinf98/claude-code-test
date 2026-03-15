@@ -26,6 +26,11 @@ def save_month(df, data_dir="data"):
     dates = pd.to_datetime(df["Date"])
     year_month = dates.dt.to_period("M").mode()[0]
     filename = os.path.join(data_dir, f"{year_month}.csv")
+    if os.path.exists(filename):
+        existing = pd.read_csv(filename)
+        df = pd.concat([existing, df], ignore_index=True)
+        df = df.drop_duplicates(subset=["Date", "Description", "Debit", "Credit"])
+        df = df.reset_index(drop=True)
     df.to_csv(filename, index=False)
     return filename
 
