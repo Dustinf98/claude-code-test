@@ -50,12 +50,10 @@ NAV_ITEMS = [
 
 
 def _configure_tree_tags(tree):
-    """Apply category background/foreground color tags to a Treeview."""
-    for cat, bg in CATEGORY_COLORS.items():
-        fg = RED if cat == "Uncategorized" else FG_TEXT
-        tree.tag_configure(f"cat_{cat}", background=bg, foreground=fg)
-    # Legacy tag kept for any pre-existing code paths
-    tree.tag_configure("uncategorized", background=CATEGORY_COLORS["Uncategorized"], foreground=RED)
+    """Register row tags (no row-level colors — canvas overlay handles Category cell coloring)."""
+    for cat in CATEGORY_COLORS:
+        tree.tag_configure(f"cat_{cat}")
+    tree.tag_configure("uncategorized")
 
 
 def _category_tag(cat):
@@ -105,6 +103,51 @@ class ExpenseApp(ttk.Window):
             background=[("selected", ACCENT)],
             foreground=[("selected", BG_BASE)],
         )
+
+    # ── Per-cell category canvas ───────────────────────────────────────────────
+    def _attach_category_canvas(self, tree):
+        """Overlay a Canvas on the Category column so only that cell gets a background color."""
+        canvas = tk.Canvas(tree, bg=BG_SURFACE, highlightthickness=0, bd=0)
+
+        def repaint(*_):
+            canvas.delete("all")
+            items = tree.get_children()
+            if not items:
+                canvas.place_forget()
+                return
+            for iid in items:
+                b = tree.bbox(iid, "Category")
+                if b:
+                    col_x, first_y, col_w, _ = b
+                    break
+            else:
+                return  # tree rendered but nothing visible (all scrolled away)
+            canvas.place(x=col_x, y=first_y, width=col_w,
+                         height=max(1, tree.winfo_height() - first_y))
+            canvas.lift()
+            for iid in items:
+                b = tree.bbox(iid, "Category")
+                if not b:
+                    continue
+                _, y, _, h = b
+                cy = y - first_y
+                cat = tree.set(iid, "Category")
+                color = CATEGORY_COLORS.get(cat, BG_SURFACE)
+                canvas.create_rectangle(0, cy, col_w, cy + h, fill=color, outline="")
+                fg = RED if cat == "Uncategorized" else FG_TEXT
+                canvas.create_text(6, cy + h // 2, text=cat, fill=fg,
+                                   font=("Segoe UI", 10), anchor="w")
+
+        def _fwd(e, etype):
+            tree.event_generate(etype, x=canvas.winfo_x() + e.x, y=canvas.winfo_y() + e.y)
+
+        canvas.bind("<Button-1>",   lambda e: _fwd(e, "<Button-1>"))
+        canvas.bind("<Double-1>",   lambda e: _fwd(e, "<Double-1>"))
+        canvas.bind("<Motion>",     lambda e: _fwd(e, "<Motion>"))
+        canvas.bind("<MouseWheel>", lambda e: _fwd(e, "<MouseWheel>"))
+        tree.bind("<Configure>",    lambda _: tree.after_idle(repaint), add="+")
+        tree.bind("<MouseWheel>",   lambda _: tree.after_idle(repaint), add="+")
+        return repaint
 
     # ── Top-level layout ───────────────────────────────────────────────────────
     def _build_layout(self):
@@ -249,6 +292,12 @@ class ExpenseApp(ttk.Window):
         frame.columnconfigure(0, weight=1)
 
         _configure_tree_tags(self._preview_tree)
+        self._preview_canvas_repaint = self._attach_category_canvas(self._preview_tree)
+
+        def _preview_yview(*a):
+            self._preview_tree.yview(*a)
+            self._preview_tree.after_idle(self._preview_canvas_repaint)
+        vsb.config(command=_preview_yview)
 
     def _load_csv(self):
         path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
@@ -285,6 +334,7 @@ class ExpenseApp(ttk.Window):
             vals = (r.get("Date", ""), r.get("Description", ""),
                     r.get("Debit", ""), r.get("Credit", ""), cat)
             self._preview_tree.insert("", "end", values=vals, tags=(_category_tag(cat),))
+        self._preview_tree.after_idle(self._preview_canvas_repaint)
 
     def _import_data(self):
         if self._preview_df is None:
@@ -347,6 +397,13 @@ class ExpenseApp(ttk.Window):
         frame.columnconfigure(0, weight=1)
 
         _configure_tree_tags(self._tx_tree)
+        self._tx_canvas_repaint = self._attach_category_canvas(self._tx_tree)
+
+        def _tx_yview(*a):
+            self._tx_tree.yview(*a)
+            self._tx_tree.after_idle(self._tx_canvas_repaint)
+        vsb.config(command=_tx_yview)
+
         self._tx_tree.bind("<Double-1>", self._on_tx_double_click)
 
     def _build_stats_bar(self, parent):
@@ -429,6 +486,7 @@ class ExpenseApp(ttk.Window):
             vals = (r.get("Date", ""), r.get("Description", ""),
                     r.get("Debit", ""), r.get("Credit", ""), cat)
             self._tx_tree.insert("", "end", values=vals, tags=(_category_tag(cat),))
+        self._tx_tree.after_idle(self._tx_canvas_repaint)
 
     def _on_tx_double_click(self, event):
         """Open an inline editor for the Category cell."""
@@ -463,6 +521,7 @@ class ExpenseApp(ttk.Window):
             vals[col_num] = new_val
             self._tx_tree.item(item, values=vals, tags=(_category_tag(new_val),))
             combo.destroy()
+            self._tx_tree.after_idle(self._tx_canvas_repaint)
 
         combo.bind("<<ComboboxSelected>>", apply)
         combo.bind("<FocusOut>", lambda _e: combo.destroy())
