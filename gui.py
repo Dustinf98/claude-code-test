@@ -45,6 +45,7 @@ NAV_ITEMS = [
     ("📥", "Import",       "import"),
     ("📋", "Transactions", "transactions"),
     ("📈", "Charts",       "charts"),
+    ("🏷️",  "Rules",        "rules"),
 ]
 
 
@@ -130,10 +131,12 @@ class ExpenseApp(ttk.Window):
         self._frame_import       = tk.Frame(content, bg=BG_BASE)
         self._frame_transactions = tk.Frame(content, bg=BG_BASE)
         self._frame_charts       = tk.Frame(content, bg=BG_BASE)
+        self._frame_rules        = tk.Frame(content, bg=BG_BASE)
 
         self._build_import_tab()
         self._build_transactions_tab()
         self._build_charts_tab()
+        self._build_rules_tab()
 
     def _build_nav_item(self, sidebar, icon, label, key):
         item_frame = tk.Frame(sidebar, bg=BG_MANTLE, cursor="hand2")
@@ -195,6 +198,7 @@ class ExpenseApp(ttk.Window):
             "import":       self._frame_import,
             "transactions": self._frame_transactions,
             "charts":       self._frame_charts,
+            "rules":        self._frame_rules,
         }
         for k, frame in frame_map.items():
             if k == key:
@@ -528,3 +532,187 @@ class ExpenseApp(ttk.Window):
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
         self._chart_canvas = canvas
+
+    # ── TAB 4 — RULES ─────────────────────────────────────────────────────────
+    def _build_rules_tab(self):
+        # Toolbar
+        toolbar = tk.Frame(self._frame_rules, bg=BG_BASE)
+        toolbar.pack(fill="x", padx=14, pady=10)
+
+        ttk.Button(toolbar, text="Save Rules", command=self._rules_save,
+                   bootstyle="primary").pack(side="left", padx=(0, 10))
+        self._rules_status = tk.Label(toolbar, text="", bg=BG_BASE, fg=FG_SUBTEXT,
+                                      font=("Segoe UI", 9))
+        self._rules_status.pack(side="left")
+
+        # Two-column body
+        body = tk.Frame(self._frame_rules, bg=BG_BASE)
+        body.pack(fill="both", expand=True, padx=14, pady=(0, 10))
+        body.columnconfigure(0, weight=1)
+        body.columnconfigure(2, weight=1)
+        body.rowconfigure(0, weight=1)
+
+        # ── Left panel ────────────────────────────────────────────────────────
+        left = tk.Frame(body, bg=BG_BASE)
+        left.grid(row=0, column=0, sticky="nsew")
+        left.rowconfigure(1, weight=1)
+        left.columnconfigure(0, weight=1)
+
+        tk.Label(left, text="Categories", bg=BG_BASE, fg=ACCENT,
+                 font=("Segoe UI", 10, "bold")).grid(row=0, column=0, columnspan=2,
+                                                      sticky="w", pady=(0, 4))
+
+        list_frame_l = tk.Frame(left, bg=BG_BASE)
+        list_frame_l.grid(row=1, column=0, columnspan=2, sticky="nsew")
+        list_frame_l.rowconfigure(0, weight=1)
+        list_frame_l.columnconfigure(0, weight=1)
+
+        self._cat_listbox = tk.Listbox(
+            list_frame_l,
+            bg=BG_SURFACE, fg=FG_TEXT,
+            selectbackground=ACCENT, selectforeground=BG_BASE,
+            font=("Segoe UI", 10),
+            relief="flat", borderwidth=0,
+            activestyle="none",
+        )
+        vsb_cat = ttk.Scrollbar(list_frame_l, orient="vertical",
+                                command=self._cat_listbox.yview)
+        self._cat_listbox.configure(yscrollcommand=vsb_cat.set)
+        self._cat_listbox.grid(row=0, column=0, sticky="nsew")
+        vsb_cat.grid(row=0, column=1, sticky="ns")
+
+        add_row_l = tk.Frame(left, bg=BG_BASE)
+        add_row_l.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        add_row_l.columnconfigure(0, weight=1)
+
+        self._new_cat_var = tk.StringVar()
+        tk.Entry(add_row_l, textvariable=self._new_cat_var,
+                 bg=BG_SURFACE, fg=FG_TEXT, insertbackground=FG_TEXT,
+                 relief="flat", font=("Segoe UI", 10)).grid(row=0, column=0, sticky="ew",
+                                                              padx=(0, 4))
+        ttk.Button(add_row_l, text="Add", command=self._rules_add_category,
+                   bootstyle="success-outline").grid(row=0, column=1)
+
+        ttk.Button(left, text="Delete Selected", command=self._rules_delete_category,
+                   bootstyle="danger-outline").grid(row=3, column=0, columnspan=2,
+                                                     sticky="ew", pady=(4, 0))
+
+        # Divider
+        tk.Frame(body, bg=BG_SURFACE2, width=1).grid(row=0, column=1, sticky="ns",
+                                                       padx=10)
+
+        # ── Right panel ───────────────────────────────────────────────────────
+        right = tk.Frame(body, bg=BG_BASE)
+        right.grid(row=0, column=2, sticky="nsew")
+        right.rowconfigure(1, weight=1)
+        right.columnconfigure(0, weight=1)
+
+        self._kw_header = tk.Label(right, text="Keywords", bg=BG_BASE, fg=ACCENT,
+                                   font=("Segoe UI", 10, "bold"))
+        self._kw_header.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
+
+        list_frame_r = tk.Frame(right, bg=BG_BASE)
+        list_frame_r.grid(row=1, column=0, columnspan=2, sticky="nsew")
+        list_frame_r.rowconfigure(0, weight=1)
+        list_frame_r.columnconfigure(0, weight=1)
+
+        self._kw_listbox = tk.Listbox(
+            list_frame_r,
+            bg=BG_SURFACE, fg=FG_TEXT,
+            selectbackground=ACCENT, selectforeground=BG_BASE,
+            font=("Segoe UI", 10),
+            relief="flat", borderwidth=0,
+            activestyle="none",
+        )
+        vsb_kw = ttk.Scrollbar(list_frame_r, orient="vertical",
+                               command=self._kw_listbox.yview)
+        self._kw_listbox.configure(yscrollcommand=vsb_kw.set)
+        self._kw_listbox.grid(row=0, column=0, sticky="nsew")
+        vsb_kw.grid(row=0, column=1, sticky="ns")
+
+        add_row_r = tk.Frame(right, bg=BG_BASE)
+        add_row_r.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        add_row_r.columnconfigure(0, weight=1)
+
+        self._new_kw_var = tk.StringVar()
+        tk.Entry(add_row_r, textvariable=self._new_kw_var,
+                 bg=BG_SURFACE, fg=FG_TEXT, insertbackground=FG_TEXT,
+                 relief="flat", font=("Segoe UI", 10)).grid(row=0, column=0, sticky="ew",
+                                                             padx=(0, 4))
+        ttk.Button(add_row_r, text="Add Keyword", command=self._rules_add_keyword,
+                   bootstyle="success-outline").grid(row=0, column=1)
+
+        ttk.Button(right, text="Remove Selected", command=self._rules_remove_keyword,
+                   bootstyle="danger-outline").grid(row=3, column=0, columnspan=2,
+                                                     sticky="ew", pady=(4, 0))
+
+        self._cat_listbox.bind("<<ListboxSelect>>", self._on_cat_selected)
+
+        # Populate categories
+        self._rules_refresh_cats()
+
+    def _rules_refresh_cats(self):
+        self._cat_listbox.delete(0, "end")
+        for cat in self.rules:
+            self._cat_listbox.insert("end", cat)
+
+    def _rules_refresh_keywords(self, cat):
+        self._kw_listbox.delete(0, "end")
+        for kw in self.rules.get(cat, []):
+            self._kw_listbox.insert("end", kw)
+
+    def _on_cat_selected(self, _event=None):
+        sel = self._cat_listbox.curselection()
+        if not sel:
+            return
+        cat = self._cat_listbox.get(sel[0])
+        self._kw_header.configure(text=f"Keywords — {cat}")
+        self._rules_refresh_keywords(cat)
+
+    def _rules_add_category(self):
+        name = self._new_cat_var.get().strip()
+        if not name or name in self.rules:
+            return
+        self.rules[name] = []
+        self._rules_refresh_cats()
+        self._new_cat_var.set("")
+        self._rules_status.configure(text=f'Added category "{name}" — unsaved')
+
+    def _rules_delete_category(self):
+        sel = self._cat_listbox.curselection()
+        if not sel:
+            return
+        cat = self._cat_listbox.get(sel[0])
+        del self.rules[cat]
+        self._rules_refresh_cats()
+        self._kw_listbox.delete(0, "end")
+        self._kw_header.configure(text="Keywords")
+        self._rules_status.configure(text=f'Deleted "{cat}" — unsaved')
+
+    def _rules_add_keyword(self):
+        sel = self._cat_listbox.curselection()
+        if not sel:
+            return
+        cat = self._cat_listbox.get(sel[0])
+        kw = self._new_kw_var.get().strip()
+        if not kw or kw in self.rules[cat]:
+            return
+        self.rules[cat].append(kw)
+        self._rules_refresh_keywords(cat)
+        self._new_kw_var.set("")
+        self._rules_status.configure(text=f'Added keyword "{kw}" — unsaved')
+
+    def _rules_remove_keyword(self):
+        sel_cat = self._cat_listbox.curselection()
+        sel_kw  = self._kw_listbox.curselection()
+        if not sel_cat or not sel_kw:
+            return
+        cat = self._cat_listbox.get(sel_cat[0])
+        kw  = self._kw_listbox.get(sel_kw[0])
+        self.rules[cat].remove(kw)
+        self._rules_refresh_keywords(cat)
+        self._rules_status.configure(text=f'Removed "{kw}" — unsaved')
+
+    def _rules_save(self):
+        categorizer.save_rules(self.rules, CATEGORIES_PATH)
+        self._rules_status.configure(text="Rules saved.")
