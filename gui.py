@@ -124,7 +124,6 @@ class ExpenseApp(ttk.Window):
                 return  # tree rendered but nothing visible (all scrolled away)
             canvas.place(x=col_x, y=first_y, width=col_w,
                          height=max(1, tree.winfo_height() - first_y))
-            canvas.lift()
             for iid in items:
                 b = tree.bbox(iid, "Category")
                 if not b:
