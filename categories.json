@@ -1,0 +1,15 @@
+{
+  "Groceries":     ["SAVE ON FOODS", "REAL CDN SUPERSTORE", "MARKETPLACE IGA", "QUALITY GREENS"],
+  "Gas":           ["SHELL", "PETRO-CANADA", "PETRO CANADA"],
+  "Restaurants":   ["DOMINOS", "SUBWAY", "STARBUCKS", "BLENZ", "PIZZA", "TWO DONKEY", "BAKERY"],
+  "Shopping":      ["WAL-MART", "WALMART", "WINNERS", "WAREHOUSE ONE", "AMZN", "AMAZON", "INDIGO", "SHOPPERS", "SPORT CHEK", "CLEARLY"],
+  "Subscriptions": ["YOUTUBE", "PATREON", "ONLYFANS", "LOYALBILLS", "TINDER", "HINGE"],
+  "Activities":    ["FIELD OF SCREAMS", "YOGA", "WELLNESS", "COUNSEL"],
+  "Gym":           ["LEANFIT", "GOODLIFE"],
+  "Car Repairs":   ["BUDGET BRAKE", "MUFFL"],
+  "Miscellaneous": ["REPAIR EXPRESS"],
+  "Phone":         [],
+  "Insurance":     [],
+  "Rent":          [],
+  "Internet Stuff":[]
+}
