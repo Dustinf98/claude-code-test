@@ -3,7 +3,7 @@ import sys
 
 
 def ensure_dependencies():
-    required = ["pandas", "matplotlib", "openpyxl"]
+    required = ["pandas", "matplotlib", "openpyxl", "ttkbootstrap"]
     missing = []
     for pkg in required:
         try:
