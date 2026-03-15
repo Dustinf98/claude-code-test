@@ -140,28 +140,38 @@ class ExpenseApp(ttk.Window):
                 canvas.create_text(6, cy + h // 2, text=cat, fill=fg,
                                    font=("Segoe UI", 10), anchor="w")
 
-        def _fwd(e, etype):
-            tree.event_generate(etype,
-                                x=_pos["col_x"] + e.x,
-                                y=_pos["first_y"] + e.y)
+        class _Ev:
+            __slots__ = ("x", "y")
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
 
-        canvas.bind("<Button-1>",   lambda e: _fwd(e, "<Button-1>"))
-        canvas.bind("<Motion>",     lambda e: _fwd(e, "<Motion>"))
-        canvas.bind("<MouseWheel>", lambda e: _fwd(e, "<MouseWheel>"))
+        def _select_row(e):
+            """Select the row under the cursor without generating a synthetic event."""
+            iid = tree.identify_row(_pos["first_y"] + e.y)
+            if iid:
+                tree.selection_set(iid)
+                tree.focus(iid)
+
+        def _scroll(e):
+            tree.yview_scroll(int(-1 * (e.delta / 120)), "units")
+            tree.after_idle(repaint)
+
+        canvas.bind("<Button-1>",   _select_row)
+        canvas.bind("<MouseWheel>", _scroll)
         tree.bind("<Configure>",    lambda _: tree.after_idle(repaint), add="+")
         tree.bind("<MouseWheel>",   lambda _: tree.after_idle(repaint), add="+")
 
         if on_double_click:
-            class _Ev:
-                __slots__ = ("x", "y")
-                def __init__(self, x, y):
-                    self.x = x
-                    self.y = y
             canvas.bind("<Double-1>",
                         lambda e: on_double_click(
                             _Ev(_pos["col_x"] + e.x, _pos["first_y"] + e.y)))
         else:
-            canvas.bind("<Double-1>", lambda e: _fwd(e, "<Double-1>"))
+            canvas.bind("<Double-1>",
+                        lambda e: tree.event_generate(
+                            "<Double-1>",
+                            x=_pos["col_x"] + e.x,
+                            y=_pos["first_y"] + e.y))
 
         return repaint
 
